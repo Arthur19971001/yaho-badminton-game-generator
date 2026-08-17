@@ -1,0 +1,43 @@
+name: "Macos Build"
+description: "Builds an Zip for Macos using Flutter."
+inputs:
+  token:
+    description: "GitHub Token"
+    required: true
+  ref-name:
+    description: "GitHub Ref Name"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Enable macOS build
+      shell: bash
+      run: flutter config --enable-macos-desktop
+
+    - name: Build artifacts
+      shell: bash
+      run: flutter build macos --release
+
+    - name: Create DMG file
+      uses: QQxiaoming/create-dmg-action@v0.0.2
+      with:
+        name: "yaho_badminton_game_generator"
+        srcdir: "build/macos/Build/Products/Release/yaho_badminton_game_generator.app"
+
+    # - name: Compress DMG into ZIP
+    #   shell: bash
+    #   run: zip -r build/macos/Build/Products/Release/yaho_badminton_game_generator.zip build/macos/Build/Products/Release/yaho_badminton_game_generator.dmg
+
+    # - name: Upload ZIP file
+    #   uses: actions/upload-artifact@v3
+    #   with:
+    #     name: macos-app
+    #     path: build/macos/Build/Products/Release/yaho_badminton_game_generator.zip
+
+    - name: macOS Release
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+      with:
+        files: /Users/runner/work/yaho_badminton_game_generator/yaho_badminton_game_generator/yaho_badminton_game_generator.dmg
