@@ -1,0 +1,40 @@
+name: Macos Build Release 🚀
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  Macos-Build-Release:
+    defaults:
+      run:
+        shell: bash
+    runs-on: macos-latest
+
+    steps:
+      - run: |
+          echo "Triggered by ${{ github.actor }} on a ${{ github.event_name }} event."
+          echo "And is running on a ${{ runner.os }} agent."
+
+      - name: Runner Software Versions
+        run: |
+          git --version
+          jq --version
+
+      - name: Check out ${{ github.repository }} - ${{ github.ref }}
+        uses: actions/checkout@v4
+
+      - name: Get App Name and Version
+        id: get-app
+        uses: ./.github/actions/get-app-name-and-version
+
+      - name: Install Flutter
+        uses: ./.github/actions/install-and-configure-flutter
+
+      - name: Macos Build
+        uses: ./.github/actions/macos-build
+        with:
+          ref-name: ${{ github.ref_name }}
+          token: ${{ secrets.TOKEN }}
