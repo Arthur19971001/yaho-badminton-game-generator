@@ -1,0 +1,51 @@
+name: yaho_badminton_game_generator
+description: "야호 배드민턴 게임 생성기"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  riverpod_annotation: ^4.0.0
+  flutter_riverpod: ^3.1.0
+  go_router: ^17.4.0
+  flex_color_scheme: ^8.4.0
+  path: ^1.9.0
+  path_provider: ^2.1.4
+  sqflite_common_ffi: 2.3.3
+  intl: ^0.20.2
+  audioplayers: ^6.7.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.12
+  riverpod_generator: ^4.0.0+1
+  custom_lint: ^0.8.1
+  riverpod_lint: ^3.1.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/sounds/
+
+# sqlite3 >=3.0.0 ships a native build hook (hook/build.dart). The Dart SDK
+# bundled with this Flutter version refuses to AOT-compile build_runner's
+# script when any package in the graph has one ("dart compile ... does not
+# support build hooks"), which breaks riverpod code generation entirely.
+# Pinning to the last hook-free release (also what dohc_bible_ppt resolves
+# to) sidesteps that; sqflite_common_ffi 2.3.3 only needs sqlite3 >=2.3.0.
+dependency_overrides:
+  sqlite3: 2.4.6
