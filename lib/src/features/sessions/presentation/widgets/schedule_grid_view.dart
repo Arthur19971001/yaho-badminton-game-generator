@@ -5,6 +5,7 @@ import '../../../members/domain/member.dart';
 import '../../application/session_controller.dart';
 import '../../domain/game_round.dart';
 import 'court_capacity.dart';
+import 'player_actions.dart';
 import 'player_drag_payload.dart';
 
 /// 인원별 보기: a matrix with one row per person and one column per game,
@@ -104,6 +105,13 @@ class _ScheduleGridViewState extends ConsumerState<ScheduleGridView> {
     final notifier = ref.read(
       sessionControllerProvider(widget.sessionId).notifier,
     );
+    final actions = PlayerActions(
+      sessionId: widget.sessionId,
+      rounds: widget.rounds,
+      memberById: widget.memberById,
+      attendeeIds: widget.attendeeIds,
+    );
+    final lastIndex = widget.rounds.length - 1;
 
     Future<void> swap(
       PlayerDragPayload incoming,
@@ -170,6 +178,20 @@ class _ScheduleGridViewState extends ConsumerState<ScheduleGridView> {
                   itemBuilder: (context, index) => _NameCell(
                     height: _rowHeight,
                     name: nameOf(people[index]),
+                    // The name column isn't tied to one game, so it
+                    // covers the whole session.
+                    onTap: () => actions.showCourtmates(
+                      context,
+                      playerId: people[index],
+                      throughIndex: lastIndex,
+                    ),
+                    onSecondaryTapDown: (position) => actions.showMenuAt(
+                      context,
+                      ref,
+                      position,
+                      playerId: people[index],
+                      throughIndex: lastIndex,
+                    ),
                   ),
                 ),
               ),
@@ -215,7 +237,8 @@ class _ScheduleGridViewState extends ConsumerState<ScheduleGridView> {
                             final personId = people[index];
                             return Row(
                               children: [
-                                for (final round in widget.rounds)
+                                for (final (roundIndex, round)
+                                    in widget.rounds.indexed)
                                   _ScheduleCell(
                                     key: ValueKey(
                                       'schedule-cell-${round.id}-$personId',
@@ -238,6 +261,19 @@ class _ScheduleGridViewState extends ConsumerState<ScheduleGridView> {
                                       round.id,
                                       personId,
                                       courtNumber,
+                                    ),
+                                    onTap: () => actions.showCourtmates(
+                                      context,
+                                      playerId: personId,
+                                      throughIndex: roundIndex,
+                                    ),
+                                    onPlayerMenuSelected: (selected) =>
+                                        actions.handleMenuSelection(
+                                      context,
+                                      ref,
+                                      selected,
+                                      playerId: personId,
+                                      throughIndex: roundIndex,
                                     ),
                                   ),
                               ],
@@ -367,13 +403,32 @@ class _ReorderableHeaderCell extends StatelessWidget {
 }
 
 class _NameCell extends StatelessWidget {
-  const _NameCell({required this.height, required this.name});
+  const _NameCell({
+    required this.height,
+    required this.name,
+    required this.onTap,
+    required this.onSecondaryTapDown,
+  });
 
   final double height;
   final String name;
+  final VoidCallback onTap;
+  final void Function(Offset globalPosition) onSecondaryTapDown;
 
   @override
   Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onSecondaryTapDown: (details) =>
+          onSecondaryTapDown(details.globalPosition),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: _content(context),
+      ),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     return Container(
       height: height,
       alignment: Alignment.centerLeft,
@@ -402,6 +457,8 @@ class _ScheduleCell extends StatelessWidget {
     required this.courtOptions,
     required this.onSwapRequested,
     required this.onSetStatus,
+    required this.onTap,
+    required this.onPlayerMenuSelected,
     super.key,
   });
 
@@ -420,13 +477,20 @@ class _ScheduleCell extends StatelessWidget {
   /// null for resting) -- the right-click alternative to dragging.
   final void Function(int? courtNumber) onSetStatus;
 
+  /// Click: "같이 친 횟수" through this cell's game.
+  final VoidCallback onTap;
+
+  /// One of [PlayerActions.playerMenuItems] was picked from this cell's
+  /// right-click menu.
+  final void Function(Object selected) onPlayerMenuSelected;
+
   Future<void> _showContextMenu(
     BuildContext context,
     Offset globalPosition,
   ) async {
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     const restSentinel = 0;
-    final selected = await showMenu<int>(
+    final selected = await showMenu<Object>(
       context: context,
       position: RelativeRect.fromRect(
         Rect.fromPoints(globalPosition, globalPosition),
@@ -436,10 +500,16 @@ class _ScheduleCell extends StatelessWidget {
         for (final (courtNumber, label) in courtOptions)
           PopupMenuItem<int>(value: courtNumber, child: Text(label)),
         const PopupMenuItem<int>(value: restSentinel, child: Text('휴식')),
+        const PopupMenuDivider(),
+        ...PlayerActions.playerMenuItems,
       ],
     );
     if (selected == null) return;
-    onSetStatus(selected == restSentinel ? null : selected);
+    if (selected is int) {
+      onSetStatus(selected == restSentinel ? null : selected);
+    } else {
+      onPlayerMenuSelected(selected);
+    }
   }
 
   @override
@@ -505,6 +575,7 @@ class _ScheduleCell extends StatelessWidget {
     );
 
     return GestureDetector(
+      onTap: onTap,
       onSecondaryTapDown: (details) =>
           _showContextMenu(context, details.globalPosition),
       child: DragTarget<PlayerDragPayload>(

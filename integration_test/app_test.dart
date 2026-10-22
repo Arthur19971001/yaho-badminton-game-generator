@@ -229,7 +229,9 @@ void main() {
 
     await tester.enterText(find.widgetWithText(TextField, '생성할 게임 수'), '4');
     await tester.enterText(find.widgetWithText(TextField, '예약한 코트 수'), '2');
-    await tester.tap(find.text('예')); // gender balance on
+    // Gender balance on -- the first 예/아니오 toggle (the second one is
+    // 급수 밸런스).
+    await tester.tap(find.text('예').first);
     await tester.pumpAndSettle();
 
     // The court-name fields can push the generate button below the fold.

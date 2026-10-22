@@ -23,12 +23,10 @@ class MembersRepository {
     return rows.map(Member.fromMap).toList();
   }
 
-  Future<Member> add(String name, Gender gender) async {
-    final id = await _db.insert('members', {
-      'name': name,
-      'gender': gender.name,
-    });
-    return Member(id: id, name: name, gender: gender);
+  Future<Member> add(String name, Gender gender, {int? gradeId}) async {
+    final member = Member(id: 0, name: name, gender: gender, gradeId: gradeId);
+    final id = await _db.insert('members', member.toInsertMap());
+    return Member(id: id, name: name, gender: gender, gradeId: gradeId);
   }
 
   Future<void> update(Member member) async {

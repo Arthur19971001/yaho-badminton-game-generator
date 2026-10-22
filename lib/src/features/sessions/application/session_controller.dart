@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../grades/data/grades_repository.dart';
+import '../../grades/domain/grade.dart';
 import '../../members/data/members_repository.dart';
 import '../../members/domain/gender.dart';
 import '../../members/domain/member.dart';
@@ -68,6 +71,13 @@ class SessionController extends _$SessionController {
       final previous = _history.removeLast();
       final repo = await ref.read(sessionsRepositoryProvider.future);
       await repo.save(previous);
+      // Attendees live in their own table, not in the session row that
+      // save() writes -- restore them too when the undone edit changed
+      // them (guest add/remove, removing a player).
+      if (!listEquals(previous.attendeeIds, state.value?.attendeeIds)) {
+        await repo.setAttendees(sessionId, previous.attendeeIds);
+        ref.invalidate(sessionsControllerProvider);
+      }
       state = AsyncData(previous);
     });
   }
@@ -86,7 +96,7 @@ class SessionController extends _$SessionController {
   /// them as attending immediately. Guests live only inside this session's
   /// own data -- they're never written to the `members` table, so they
   /// never show up in the club roster or in any other session.
-  Future<void> addGuest(String name, Gender gender) {
+  Future<void> addGuest(String name, Gender gender, {int? gradeId}) {
     return _serialized(() async {
       final current = state.requireValue;
       final nextGuestId = current.guests.isEmpty
@@ -95,7 +105,12 @@ class SessionController extends _$SessionController {
                   .map((g) => g.id)
                   .reduce((a, b) => a < b ? a : b) -
               1;
-      final guest = Member(id: nextGuestId, name: name, gender: gender);
+      final guest = Member(
+        id: nextGuestId,
+        name: name,
+        gender: gender,
+        gradeId: gradeId,
+      );
       final newAttendeeIds = [...current.attendeeIds, nextGuestId];
 
       final repo = await ref.read(sessionsRepositoryProvider.future);
@@ -146,6 +161,7 @@ class SessionController extends _$SessionController {
     required int courts,
     required int gamesToGenerate,
     required bool genderBalance,
+    bool gradeBalance = false,
   }) {
     return _serialized(() async {
       final current = state.requireValue;
@@ -156,17 +172,28 @@ class SessionController extends _$SessionController {
           .where((m) => attendeeSet.contains(m.id))
           .toList();
 
+      Map<int, int>? gradePoints;
+      if (gradeBalance) {
+        final gradesRepo = await ref.read(gradesRepositoryProvider.future);
+        gradePoints = resolveGradePoints(
+          {for (final m in attendees) m.id: m.gradeId},
+          await gradesRepo.getAll(),
+        );
+      }
+
       final newRounds = GameGenerator().generate(
         attendees: attendees,
         courts: courts,
         gamesToGenerate: gamesToGenerate,
         genderBalance: genderBalance,
+        gradePoints: gradePoints,
         existingRounds: current.rounds,
       );
 
       await _persist(current.copyWith(
         courts: courts,
         genderBalance: genderBalance,
+        gradeBalance: gradeBalance,
         rounds: [...current.rounds, ...newRounds],
       ));
       ref.invalidate(sessionsControllerProvider);
@@ -290,6 +317,50 @@ class SessionController extends _$SessionController {
           updatedRounds[i].copyWith(gameNumber: i + 1),
       ];
       await _persist(current.copyWith(rounds: renumbered));
+      ref.invalidate(sessionsControllerProvider);
+    });
+  }
+
+  /// "사용자 빼기": takes [playerId] out of every game numbered
+  /// [fromGameNumber] or later (their court spot is left empty -- flagged
+  /// as under capacity -- and they're dropped from that game's bench), and
+  /// removes them from today's attendees so later "게임 추가 생성" runs
+  /// don't bring them back. [fromGameNumber] 0 leaves every existing game
+  /// untouched and only removes them from the attendee list. Guests keep
+  /// their guest entry so earlier games still show their name. Undoable.
+  Future<void> removePlayerFromGames({
+    required int playerId,
+    required int fromGameNumber,
+  }) {
+    return _serialized(() async {
+      final current = state.requireValue;
+      final newRounds = [
+        for (final round in current.rounds)
+          if (fromGameNumber < 1 || round.gameNumber < fromGameNumber)
+            round
+          else
+            round.copyWith(
+              courts: [
+                for (final court in round.courts)
+                  court.copyWith(
+                    playerIds:
+                        court.playerIds.where((id) => id != playerId).toList(),
+                  ),
+              ],
+              restingPlayerIds: round.restingPlayerIds
+                  .where((id) => id != playerId)
+                  .toList(),
+            ),
+      ];
+      final newAttendeeIds =
+          current.attendeeIds.where((id) => id != playerId).toList();
+
+      final repo = await ref.read(sessionsRepositoryProvider.future);
+      await repo.setAttendees(sessionId, newAttendeeIds);
+      await _persist(current.copyWith(
+        rounds: newRounds,
+        attendeeIds: newAttendeeIds,
+      ));
       ref.invalidate(sessionsControllerProvider);
     });
   }

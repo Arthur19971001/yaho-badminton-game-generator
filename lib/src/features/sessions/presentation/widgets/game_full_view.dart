@@ -9,6 +9,7 @@ import '../../application/game_timer_controller.dart';
 import '../../domain/court_assignment.dart';
 import '../../domain/game_round.dart';
 import 'court_capacity.dart';
+import 'player_actions.dart';
 import 'player_streak.dart';
 
 /// Korean names first (in 가나다 order), then everything else
@@ -53,11 +54,12 @@ int _compareDisplayNames(String a, String b) {
 /// scrollable; in [isPresentation] mode (the PPT-style fullscreen view)
 /// every court is instead sized to fit on screen at once, with larger
 /// text for readability from a distance.
-class GameFullView extends StatelessWidget {
+class GameFullView extends ConsumerWidget {
   const GameFullView({
     required this.sessionId,
     required this.rounds,
     required this.memberById,
+    required this.attendeeIds,
     required this.gameIndex,
     required this.onIndexChanged,
     required this.courtLabel,
@@ -68,6 +70,7 @@ class GameFullView extends StatelessWidget {
   final int sessionId;
   final List<GameRound> rounds;
   final Map<int, Member> memberById;
+  final List<int> attendeeIds;
   final int gameIndex;
   final ValueChanged<int> onIndexChanged;
   final String Function(int courtNumber) courtLabel;
@@ -76,8 +79,26 @@ class GameFullView extends StatelessWidget {
   static const _cardSpacing = 24.0;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final round = rounds[gameIndex];
+    final actions = PlayerActions(
+      sessionId: sessionId,
+      rounds: rounds,
+      memberById: memberById,
+      attendeeIds: attendeeIds,
+    );
+    void showCourtmates(int playerId) => actions.showCourtmates(
+          context,
+          playerId: playerId,
+          throughIndex: gameIndex,
+        );
+    void showMenu(int playerId, Offset position) => actions.showMenuAt(
+          context,
+          ref,
+          position,
+          playerId: playerId,
+          throughIndex: gameIndex,
+        );
     final streaks = {
       for (final playerId in round.courts.expand((c) => c.playerIds))
         playerId: consecutiveGamesPlayed(rounds, gameIndex, playerId),
@@ -178,6 +199,8 @@ class GameFullView extends StatelessWidget {
                                     ),
                                     memberById: memberById,
                                     streakByPlayerId: streaks,
+                                    onPlayerTap: showCourtmates,
+                                    onPlayerSecondaryTap: showMenu,
                                     large: true,
                                   ),
                                 ),
@@ -220,6 +243,8 @@ class GameFullView extends StatelessWidget {
                                     label: courtLabel(rowCourts[i].courtNumber),
                                     memberById: memberById,
                                     streakByPlayerId: streaks,
+                                    onPlayerTap: showCourtmates,
+                                    onPlayerSecondaryTap: showMenu,
                                   ),
                                 ),
                               ],
@@ -236,9 +261,11 @@ class GameFullView extends StatelessWidget {
         if (round.restingPlayerIds.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: Text(
-              '쉬는 인원: ${(round.restingPlayerIds.map((id) => memberById[id]?.name ?? '알 수 없음').toList()..sort(_compareDisplayNames)).join(', ')}',
-              style: Theme.of(context).textTheme.bodyMedium,
+            child: _RestingNames(
+              restingPlayerIds: round.restingPlayerIds,
+              memberById: memberById,
+              onPlayerTap: showCourtmates,
+              onPlayerSecondaryTap: showMenu,
             ),
           ),
       ],
@@ -247,12 +274,81 @@ class GameFullView extends StatelessWidget {
 
 }
 
+/// A player's name that opens the "같이 친 횟수" dialog on click and the
+/// player menu on right-click.
+class _ClickableName extends StatelessWidget {
+  const _ClickableName({
+    required this.playerId,
+    required this.onTap,
+    required this.onSecondaryTap,
+    required this.child,
+  });
+
+  final int playerId;
+  final void Function(int playerId) onTap;
+  final void Function(int playerId, Offset globalPosition) onSecondaryTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onTap(playerId),
+      onSecondaryTapDown: (details) =>
+          onSecondaryTap(playerId, details.globalPosition),
+      child: MouseRegion(cursor: SystemMouseCursors.click, child: child),
+    );
+  }
+}
+
+/// "쉬는 인원: 가, 나, 다" with each name individually clickable.
+class _RestingNames extends StatelessWidget {
+  const _RestingNames({
+    required this.restingPlayerIds,
+    required this.memberById,
+    required this.onPlayerTap,
+    required this.onPlayerSecondaryTap,
+  });
+
+  final List<int> restingPlayerIds;
+  final Map<int, Member> memberById;
+  final void Function(int playerId) onPlayerTap;
+  final void Function(int playerId, Offset globalPosition)
+      onPlayerSecondaryTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodyMedium;
+    String nameOf(int id) => memberById[id]?.name ?? '알 수 없음';
+    final sorted = [...restingPlayerIds]
+      ..sort((a, b) => _compareDisplayNames(nameOf(a), nameOf(b)));
+
+    return Wrap(
+      alignment: WrapAlignment.center,
+      children: [
+        Text('쉬는 인원: ', style: style),
+        for (var i = 0; i < sorted.length; i++)
+          _ClickableName(
+            playerId: sorted[i],
+            onTap: onPlayerTap,
+            onSecondaryTap: onPlayerSecondaryTap,
+            child: Text(
+              i < sorted.length - 1 ? '${nameOf(sorted[i])}, ' : nameOf(sorted[i]),
+              style: style,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _CourtCard extends StatelessWidget {
   const _CourtCard({
     required this.court,
     required this.label,
     required this.memberById,
     required this.streakByPlayerId,
+    required this.onPlayerTap,
+    required this.onPlayerSecondaryTap,
     this.large = false,
   });
 
@@ -260,6 +356,9 @@ class _CourtCard extends StatelessWidget {
   final String label;
   final Map<int, Member> memberById;
   final Map<int, int> streakByPlayerId;
+  final void Function(int playerId) onPlayerTap;
+  final void Function(int playerId, Offset globalPosition)
+      onPlayerSecondaryTap;
 
   /// Bigger text for the fullscreen/presentation view, read from further
   /// away than the normal windowed full view.
@@ -324,9 +423,14 @@ class _CourtCard extends StatelessWidget {
                     child: Center(
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: Text(
-                          (memberById[id] ?? Member.unknown(id)).name,
-                          style: bigNameStyle,
+                        child: _ClickableName(
+                          playerId: id,
+                          onTap: onPlayerTap,
+                          onSecondaryTap: onPlayerSecondaryTap,
+                          child: Text(
+                            (memberById[id] ?? Member.unknown(id)).name,
+                            style: bigNameStyle,
+                          ),
                         ),
                       ),
                     ),
@@ -345,9 +449,14 @@ class _CourtCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Column(
                 children: [
-                  Text(
-                    (memberById[id] ?? Member.unknown(id)).name,
-                    style: Theme.of(context).textTheme.titleMedium,
+                  _ClickableName(
+                    playerId: id,
+                    onTap: onPlayerTap,
+                    onSecondaryTap: onPlayerSecondaryTap,
+                    child: Text(
+                      (memberById[id] ?? Member.unknown(id)).name,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
                   if ((streakByPlayerId[id] ?? 0) > 1)
                     Text(

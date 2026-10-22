@@ -7,6 +7,7 @@ import '../../domain/game_round.dart';
 import 'court_slot.dart';
 import 'play_count_summary.dart';
 import 'player_chip.dart';
+import 'player_actions.dart';
 import 'player_drag_payload.dart';
 import 'player_streak.dart';
 
@@ -18,6 +19,7 @@ class GamesTableView extends ConsumerWidget {
     required this.sessionId,
     required this.rounds,
     required this.memberById,
+    required this.attendeeIds,
     required this.courtLabel,
     super.key,
   });
@@ -25,11 +27,18 @@ class GamesTableView extends ConsumerWidget {
   final int sessionId;
   final List<GameRound> rounds;
   final Map<int, Member> memberById;
+  final List<int> attendeeIds;
   final String Function(int courtNumber) courtLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(sessionControllerProvider(sessionId).notifier);
+    final actions = PlayerActions(
+      sessionId: sessionId,
+      rounds: rounds,
+      memberById: memberById,
+      attendeeIds: attendeeIds,
+    );
 
     return Column(
       children: [
@@ -59,6 +68,21 @@ class GamesTableView extends ConsumerWidget {
                       roundIdB: round.id,
                       playerIdB: targetId,
                     ),
+                  );
+
+              void showCourtmates(int playerId) => actions.showCourtmates(
+                    context,
+                    playerId: playerId,
+                    throughIndex: index,
+                  );
+
+              void showMenu(int playerId, Offset position) =>
+                  actions.showMenuAt(
+                    context,
+                    ref,
+                    position,
+                    playerId: playerId,
+                    throughIndex: index,
                   );
 
               return Card(
@@ -114,6 +138,8 @@ class GamesTableView extends ConsumerWidget {
                                 ),
                               ),
                               onSwap: swap,
+                              onPlayerTap: showCourtmates,
+                              onPlayerSecondaryTap: showMenu,
                               onDelete: () => _confirmDeleteCourt(
                                 context,
                                 notifier,
@@ -139,6 +165,8 @@ class GamesTableView extends ConsumerWidget {
                           ),
                         ),
                         onSwap: swap,
+                        onPlayerTap: showCourtmates,
+                        onPlayerSecondaryTap: showMenu,
                       ),
                     ],
                   ),
@@ -245,6 +273,8 @@ class _RestingBench extends StatelessWidget {
     required this.memberById,
     required this.onDrop,
     required this.onSwap,
+    required this.onPlayerTap,
+    required this.onPlayerSecondaryTap,
   });
 
   final int roundId;
@@ -252,6 +282,9 @@ class _RestingBench extends StatelessWidget {
   final Map<int, Member> memberById;
   final void Function(int playerId) onDrop;
   final void Function(PlayerDragPayload incoming, int targetPlayerId) onSwap;
+  final void Function(int playerId) onPlayerTap;
+  final void Function(int playerId, Offset globalPosition)
+      onPlayerSecondaryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -300,6 +333,9 @@ class _RestingBench extends StatelessWidget {
                         roundId: roundId,
                         onSwapRequested: (incoming) =>
                             onSwap(incoming, playerId),
+                        onTap: () => onPlayerTap(playerId),
+                        onSecondaryTapDown: (position) =>
+                            onPlayerSecondaryTap(playerId, position),
                       ),
                   ],
                 ),

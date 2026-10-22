@@ -215,7 +215,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     if (result == null) return;
     await ref
         .read(sessionControllerProvider(widget.sessionId).notifier)
-        .addGuest(result.name, result.gender);
+        .addGuest(result.name, result.gender, gradeId: result.gradeId);
     if (!context.mounted) return;
     final latest = ref.read(sessionControllerProvider(widget.sessionId)).value;
     if (latest != null) {

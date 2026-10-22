@@ -12,6 +12,7 @@ class GameSession {
     required this.date,
     required this.courts,
     required this.genderBalance,
+    this.gradeBalance = false,
     required this.attendeeIds,
     required this.rounds,
     required this.guests,
@@ -22,6 +23,10 @@ class GameSession {
   final DateTime date;
   final int courts;
   final bool genderBalance;
+
+  /// Last-used "급수 밸런스" setting: courts are grouped so that the best
+  /// 2-vs-2 split has (nearly) equal summed grade points.
+  final bool gradeBalance;
   final List<int> attendeeIds;
   final List<GameRound> rounds;
 
@@ -50,6 +55,7 @@ class GameSession {
   GameSession copyWith({
     int? courts,
     bool? genderBalance,
+    bool? gradeBalance,
     List<int>? attendeeIds,
     List<GameRound>? rounds,
     List<Member>? guests,
@@ -60,6 +66,7 @@ class GameSession {
         date: date,
         courts: courts ?? this.courts,
         genderBalance: genderBalance ?? this.genderBalance,
+        gradeBalance: gradeBalance ?? this.gradeBalance,
         attendeeIds: attendeeIds ?? this.attendeeIds,
         rounds: rounds ?? this.rounds,
         guests: guests ?? this.guests,
@@ -80,6 +87,7 @@ class GameSession {
       date: DateTime.parse(row['date']! as String),
       courts: row['courts']! as int,
       genderBalance: (row['gender_balance']! as int) == 1,
+      gradeBalance: ((row['grade_balance'] as int?) ?? 0) == 1,
       attendeeIds: attendeeIds,
       rounds: gamesRaw
           .map((g) => GameRound.fromJson(g as Map<String, Object?>))
@@ -94,6 +102,7 @@ class GameSession {
   Map<String, Object?> toUpdateMap() => {
         'courts': courts,
         'gender_balance': genderBalance ? 1 : 0,
+        'grade_balance': gradeBalance ? 1 : 0,
         'games_json': jsonEncode(rounds.map((r) => r.toJson()).toList()),
         'guests_json': jsonEncode(guests.map((g) => g.toJson()).toList()),
         'court_names_json': jsonEncode(courtNames),

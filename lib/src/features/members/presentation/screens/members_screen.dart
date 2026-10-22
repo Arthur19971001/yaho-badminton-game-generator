@@ -96,7 +96,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
     if (result == null) return;
     await ref
         .read(membersControllerProvider.notifier)
-        .addMember(result.name, result.gender);
+        .addMember(result.name, result.gender, gradeId: result.gradeId);
   }
 }
 
@@ -125,7 +125,11 @@ class _MemberTile extends ConsumerWidget {
                   await showMemberFormDialog(context, existing: member);
               if (result == null) return;
               await ref.read(membersControllerProvider.notifier).updateMember(
-                    member.copyWith(name: result.name, gender: result.gender),
+                    member.copyWith(
+                      name: result.name,
+                      gender: result.gender,
+                      gradeId: result.gradeId,
+                    ),
                   );
             },
           ),

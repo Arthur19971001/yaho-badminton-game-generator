@@ -33,7 +33,7 @@ final class MembersControllerProvider
   MembersController create() => MembersController();
 }
 
-String _$membersControllerHash() => r'5b07e6f6104c3133c40734b6a592b1692e7a3903';
+String _$membersControllerHash() => r'25b9b2cf57a6f927b993217f82a28923cc7928aa';
 
 abstract class _$MembersController extends $AsyncNotifier<List<Member>> {
   FutureOr<List<Member>> build();

@@ -15,6 +15,10 @@ import 'game_round.dart';
 ///     who have played less so far are prioritized for the next round).
 ///  4. Players are paired with people they haven't shared a court with yet
 ///     as much as possible.
+///  5. If [gradePoints] is given (급수 밸런스), each court's 4 players are
+///     chosen so that splitting them into two teams of 2 gives (nearly)
+///     equal summed points -- e.g. A10+C6 vs B8+B8. Only *which* 4 share a
+///     court is affected; who rests is still decided by play count alone.
 ///
 /// [existingRounds] seeds the fairness bookkeeping so that calling this
 /// again to "add N more games" continues optimizing from the full history
@@ -29,6 +33,7 @@ class GameGenerator {
     required int courts,
     required int gamesToGenerate,
     required bool genderBalance,
+    Map<int, int>? gradePoints,
     List<GameRound> existingRounds = const [],
   }) {
     if (attendees.length < 4 || courts < 1 || gamesToGenerate < 1) return [];
@@ -88,6 +93,7 @@ class GameGenerator {
         togetherCount: togetherCount,
         slotsPerRound: slotsPerRound,
         genderBalance: genderBalance,
+        gradePoints: gradePoints,
       );
       if (round == null) break;
 
@@ -109,6 +115,7 @@ class GameGenerator {
     required Map<int, Map<int, int>> togetherCount,
     required int slotsPerRound,
     required bool genderBalance,
+    required Map<int, int>? gradePoints,
   }) {
     var target = (min(ids.length, slotsPerRound) ~/ 4) * 4;
     if (target < 4) return null;
@@ -143,10 +150,20 @@ class GameGenerator {
 
     final resting = ids.where((id) => !playing.contains(id)).toList();
 
-    final courtGroups = genderBalance
+    var courtGroups = genderBalance
         ? _assignGenderBalancedCourts(
             playingMales, playingFemales, memberById, togetherCount)
         : _groupIntoFours(playing, togetherCount);
+
+    if (gradePoints != null) {
+      courtGroups = _balanceGrades(
+        courtGroups,
+        memberById: memberById,
+        togetherCount: togetherCount,
+        gradePoints: gradePoints,
+        genderBalance: genderBalance,
+      );
+    }
 
     courtGroups.shuffle(_random);
 
@@ -272,6 +289,152 @@ class GameGenerator {
       groups.add(group);
     }
     return groups;
+  }
+
+  /// How much one point of team-score difference costs relative to one
+  /// repeated pairing -- large enough that the grade gap always takes
+  /// priority, with repeat pairings only breaking ties between equally
+  /// balanced layouts (repeat counts keep growing as a session goes on, so
+  /// a small weight would let them overrule grade balance in later games).
+  static const _gradeDiffWeight = 1000;
+  static const _gradeRestarts = 8;
+
+  /// The 3 ways to split a court's 4 players into two teams of 2, as index
+  /// pairs into the court's player list.
+  static const _teamSplits = [
+    ([0, 1], [2, 3]),
+    ([0, 2], [1, 3]),
+    ([0, 3], [1, 2]),
+  ];
+
+  /// Rearranges who shares a court with whom (never who plays vs rests) to
+  /// minimize each court's best 2-vs-2 grade-point gap, plus repeat
+  /// pairings. Players are only ever exchanged with someone of the same
+  /// gender, so a gender-balanced layout (2:2 / 4:0 / 0:4) stays intact.
+  ///
+  /// Hill-climbs over pairwise swaps from the given grouping, then from a
+  /// few random regroupings (same gender slots, shuffled occupants), and
+  /// keeps the cheapest result.
+  List<List<int>> _balanceGrades(
+    List<List<int>> groups, {
+    required Map<int, Member> memberById,
+    required Map<int, Map<int, int>> togetherCount,
+    required Map<int, int> gradePoints,
+    required bool genderBalance,
+  }) {
+    // A lone court has nobody to swap with -- its best split is already
+    // whatever it is.
+    if (groups.length < 2) return groups;
+
+    int pointsOf(int id) => gradePoints[id] ?? 0;
+
+    int teamGap(List<int> group) {
+      if (group.length != 4) return 0;
+      // Mixed courts play mixed doubles (one man + one woman per team), so
+      // only those splits count when gender balance is on.
+      final mixed = genderBalance &&
+          group.where((id) => memberById[id]!.gender == Gender.male).length ==
+              2;
+      var best = 1 << 30;
+      for (final (teamA, teamB) in _teamSplits) {
+        if (mixed &&
+            memberById[group[teamA[0]]]!.gender ==
+                memberById[group[teamA[1]]]!.gender) {
+          continue;
+        }
+        final a = pointsOf(group[teamA[0]]) + pointsOf(group[teamA[1]]);
+        final b = pointsOf(group[teamB[0]]) + pointsOf(group[teamB[1]]);
+        best = min(best, (a - b).abs());
+      }
+      return best;
+    }
+
+    int repeatCost(List<int> group) {
+      var cost = 0;
+      for (var i = 0; i < group.length; i++) {
+        for (var j = i + 1; j < group.length; j++) {
+          cost += togetherCount[group[i]]?[group[j]] ?? 0;
+        }
+      }
+      return cost;
+    }
+
+    int costOf(List<int> group) =>
+        _gradeDiffWeight * teamGap(group) + repeatCost(group);
+
+    bool swappable(int a, int b) =>
+        !genderBalance || memberById[a]!.gender == memberById[b]!.gender;
+
+    List<List<int>> hillClimb(List<List<int>> start) {
+      final current = [for (final g in start) [...g]];
+      final costs = [for (final g in current) costOf(g)];
+      var improved = true;
+      var passes = 0;
+      while (improved && passes++ < 100) {
+        improved = false;
+        for (var gi = 0; gi < current.length; gi++) {
+          for (var gj = gi + 1; gj < current.length; gj++) {
+            for (var pi = 0; pi < current[gi].length; pi++) {
+              for (var pj = 0; pj < current[gj].length; pj++) {
+                final a = current[gi][pi];
+                final b = current[gj][pj];
+                if (!swappable(a, b)) continue;
+                current[gi][pi] = b;
+                current[gj][pj] = a;
+                final newI = costOf(current[gi]);
+                final newJ = costOf(current[gj]);
+                if (newI + newJ < costs[gi] + costs[gj]) {
+                  costs[gi] = newI;
+                  costs[gj] = newJ;
+                  improved = true;
+                } else {
+                  current[gi][pi] = a;
+                  current[gj][pj] = b;
+                }
+              }
+            }
+          }
+        }
+      }
+      return current;
+    }
+
+    int totalCost(List<List<int>> layout) =>
+        layout.fold(0, (sum, g) => sum + costOf(g));
+
+    /// Same per-court gender slots, occupants shuffled.
+    List<List<int>> reshuffled() {
+      final byGender = <Gender, List<int>>{};
+      for (final g in groups) {
+        for (final id in g) {
+          final key = genderBalance ? memberById[id]!.gender : Gender.male;
+          byGender.putIfAbsent(key, () => []).add(id);
+        }
+      }
+      for (final pool in byGender.values) {
+        pool.shuffle(_random);
+      }
+      return [
+        for (final g in groups)
+          [
+            for (final id in g)
+              byGender[genderBalance ? memberById[id]!.gender : Gender.male]!
+                  .removeLast(),
+          ],
+      ];
+    }
+
+    var best = hillClimb(groups);
+    var bestCost = totalCost(best);
+    for (var r = 0; r < _gradeRestarts && bestCost > 0; r++) {
+      final candidate = hillClimb(reshuffled());
+      final cost = totalCost(candidate);
+      if (cost < bestCost) {
+        best = candidate;
+        bestCost = cost;
+      }
+    }
+    return best;
   }
 }
 

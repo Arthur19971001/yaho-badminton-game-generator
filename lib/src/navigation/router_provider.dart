@@ -4,11 +4,13 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../app_startup/app_startup_provider.dart';
 import '../app_startup/app_startup_widget.dart';
+import '../features/grades/presentation/screens/grades_screen.dart';
 import '../features/members/presentation/screens/members_screen.dart';
 import '../features/sessions/presentation/screens/attendance_screen.dart';
 import '../features/sessions/presentation/screens/game_setup_screen.dart';
 import '../features/sessions/presentation/screens/results_screen.dart';
 import '../features/sessions/presentation/screens/sessions_screen.dart';
+import '../features/settings/presentation/screens/settings_screen.dart';
 import 'main_scaffold.dart';
 
 part 'router_provider.g.dart';
@@ -18,6 +20,10 @@ final GlobalKey<NavigatorState> _membersShellKey =
     GlobalKey<NavigatorState>(debugLabel: 'membersShell');
 final GlobalKey<NavigatorState> _sessionsShellKey =
     GlobalKey<NavigatorState>(debugLabel: 'sessionsShell');
+final GlobalKey<NavigatorState> _gradesShellKey =
+    GlobalKey<NavigatorState>(debugLabel: 'gradesShell');
+final GlobalKey<NavigatorState> _settingsShellKey =
+    GlobalKey<NavigatorState>(debugLabel: 'settingsShell');
 
 @riverpod
 RouterConfig<Object>? router(Ref ref) {
@@ -61,6 +67,24 @@ RouterConfig<Object>? router(Ref ref) {
               GoRoute(
                 path: '/sessions',
                 builder: (context, state) => const SessionsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _gradesShellKey,
+            routes: [
+              GoRoute(
+                path: '/grades',
+                builder: (context, state) => const GradesScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _settingsShellKey,
+            routes: [
+              GoRoute(
+                path: '/settings',
+                builder: (context, state) => const SettingsScreen(),
               ),
             ],
           ),

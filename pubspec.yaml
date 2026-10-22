@@ -1,6 +1,6 @@
 name: yaho_badminton_game_generator
 description: "야호 배드민턴 게임 생성기"
-publish_to: 'none'
+publish_to: "none"
 
 version: 1.0.0+1
 
@@ -23,6 +23,7 @@ dependencies:
   sqflite_common_ffi: 2.3.3
   intl: ^0.20.2
   audioplayers: ^6.7.1
+  file_picker: ^13.1.0
 
 dev_dependencies:
   flutter_test:

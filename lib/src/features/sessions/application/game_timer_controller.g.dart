@@ -60,7 +60,7 @@ final class GameTimerControllerProvider
 }
 
 String _$gameTimerControllerHash() =>
-    r'd02b75b289606f3bbc42a662bacdcf2e0484d36c';
+    r'c093899ec749b6bb66feb71ef41b98066947283f';
 
 /// App-wide, per-game countdown timer -- lives independently of any screen,
 /// so it keeps running when the user navigates away from the game it was

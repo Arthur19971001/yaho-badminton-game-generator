@@ -16,12 +16,18 @@ import 'player_drag_payload.dart';
 /// [consecutiveStreak], when positive, is shown as a small caption below
 /// the chip -- how many games in a row (ending at this one) this player has
 /// been assigned to a court without a rest in between.
+///
+/// [onTap] / [onSecondaryTapDown] (left/right click) are used for the
+/// "같이 친 횟수" dialog and the player menu -- a plain click doesn't start a
+/// drag, so they coexist with drag-and-drop.
 class PlayerChip extends StatelessWidget {
   const PlayerChip({
     required this.member,
     required this.roundId,
     this.onSwapRequested,
     this.consecutiveStreak,
+    this.onTap,
+    this.onSecondaryTapDown,
     super.key,
   });
 
@@ -29,6 +35,8 @@ class PlayerChip extends StatelessWidget {
   final int roundId;
   final void Function(PlayerDragPayload incoming)? onSwapRequested;
   final int? consecutiveStreak;
+  final VoidCallback? onTap;
+  final void Function(Offset globalPosition)? onSecondaryTapDown;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +51,7 @@ class PlayerChip extends StatelessWidget {
       child: _chip(context, dragging: false),
     );
 
-    final content = onSwapRequested == null
+    final target = onSwapRequested == null
         ? draggable
         : DragTarget<PlayerDragPayload>(
             onWillAcceptWithDetails: (details) =>
@@ -64,6 +72,16 @@ class PlayerChip extends StatelessWidget {
                 child: draggable,
               );
             },
+          );
+
+    final content = onTap == null && onSecondaryTapDown == null
+        ? target
+        : GestureDetector(
+            onTap: onTap,
+            onSecondaryTapDown: onSecondaryTapDown == null
+                ? null
+                : (details) => onSecondaryTapDown!(details.globalPosition),
+            child: MouseRegion(cursor: SystemMouseCursors.click, child: target),
           );
 
     if (consecutiveStreak == null || consecutiveStreak! <= 0) return content;

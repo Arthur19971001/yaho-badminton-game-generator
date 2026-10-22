@@ -8,12 +8,11 @@ runs:
   using: "composite"
   steps:
     # Required for package_info_plus
-    # TODO(hamishnorton): Figure out how to cache Java
-    - name: Set up JDK 17
+    - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
         distribution: "adopt"
-        java-version: "17"
+        java-version: "21"
 
     - name: Verify Java version
       shell: bash

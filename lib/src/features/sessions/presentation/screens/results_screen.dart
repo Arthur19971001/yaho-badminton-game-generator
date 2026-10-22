@@ -117,6 +117,7 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
               sessionId: widget.sessionId,
               rounds: session.rounds,
               memberById: memberById,
+              attendeeIds: session.attendeeIds,
               gameIndex: _fullViewIndex,
               onIndexChanged: (index) => setState(() => _fullViewIndex = index),
               courtLabel: session.labelForCourt,
@@ -135,6 +136,7 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen> {
               sessionId: widget.sessionId,
               rounds: session.rounds,
               memberById: memberById,
+              attendeeIds: session.attendeeIds,
               courtLabel: session.labelForCourt,
             );
         }

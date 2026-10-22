@@ -19,6 +19,8 @@ class CourtSlot extends StatelessWidget {
     required this.onSwap,
     this.onDelete,
     this.streakByPlayerId = const {},
+    this.onPlayerTap,
+    this.onPlayerSecondaryTap,
     super.key,
   });
 
@@ -33,6 +35,11 @@ class CourtSlot extends StatelessWidget {
   /// currently used anywhere, but keeps this widget usable without it).
   final VoidCallback? onDelete;
   final Map<int, int> streakByPlayerId;
+
+  /// Left/right click on one of this court's player chips.
+  final void Function(int playerId)? onPlayerTap;
+  final void Function(int playerId, Offset globalPosition)?
+      onPlayerSecondaryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +111,13 @@ class CourtSlot extends StatelessWidget {
                       roundId: roundId,
                       consecutiveStreak: streakByPlayerId[playerId],
                       onSwapRequested: (incoming) => onSwap(incoming, playerId),
+                      onTap: onPlayerTap == null
+                          ? null
+                          : () => onPlayerTap!(playerId),
+                      onSecondaryTapDown: onPlayerSecondaryTap == null
+                          ? null
+                          : (position) =>
+                              onPlayerSecondaryTap!(playerId, position),
                     ),
                 ],
               ),

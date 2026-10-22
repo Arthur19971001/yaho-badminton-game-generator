@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../navigation/router_provider.dart';
+import '../../settings/application/alarm_sound_controller.dart';
 
 part 'game_timer_controller.g.dart';
 
@@ -153,9 +154,9 @@ class GameTimerController extends _$GameTimerController {
   }
 
   void _showAlarm() {
-    // Max volume, looping siren -- a plain system alert sound is too quiet
+    // Max volume, looping alarm -- a plain system alert sound is too quiet
     // and easy to miss/ignore, especially over gym noise.
-    unawaited(_alarmPlayer.play(AssetSource('sounds/siren.wav'), volume: 1.0));
+    unawaited(_playAlarmSound());
     final context = rootNavigatorKey.currentContext;
     if (context == null) return;
     showDialog<void>(
@@ -175,6 +176,20 @@ class GameTimerController extends _$GameTimerController {
         ],
       ),
     );
+  }
+
+  /// Plays the user's chosen alarm sound (see 설정), falling back to the
+  /// bundled siren if it isn't loaded or fails to play -- the alarm must
+  /// never stay silent.
+  Future<void> _playAlarmSound() async {
+    Source source = AssetSource(defaultAlarmAsset);
+    try {
+      source = (await ref.read(alarmSoundControllerProvider.future)).source;
+      await _alarmPlayer.play(source, volume: 1.0);
+    } catch (_) {
+      if (source is AssetSource) return;
+      await _alarmPlayer.play(AssetSource(defaultAlarmAsset), volume: 1.0);
+    }
   }
 
   /// Stops the alarm/countdown and clears the timer entirely -- called

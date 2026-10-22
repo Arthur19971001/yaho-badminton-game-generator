@@ -34,6 +34,7 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
   final _courtsController = TextEditingController(text: '2');
   final List<TextEditingController> _courtNameControllers = [];
   bool _genderBalance = false;
+  bool _gradeBalance = false;
   bool _initialized = false;
   bool _busy = false;
 
@@ -89,6 +90,7 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
             _courtsController.text = session.courts.toString();
             _courtsController.addListener(_onCourtsFieldChanged);
             _genderBalance = session.genderBalance;
+            _gradeBalance = session.gradeBalance;
             _resizeCourtNameControllers(session.courts);
             for (var i = 0; i < _courtNameControllers.length; i++) {
               _courtNameControllers[i].text = i < session.courtNames.length
@@ -202,6 +204,25 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
                   onSelectionChanged: (selection) =>
                       setState(() => _genderBalance = selection.first),
                 ),
+                const SizedBox(height: 16),
+                Text('급수 밸런스', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  '켜면 각 코트의 4명을 2명씩 팀으로 나눴을 때 두 팀의 급수 점수 합이 '
+                  '비슷하도록 배정합니다. (예: A+C = B+B) 성별 밸런스와 함께 켤 수 있고, '
+                  '급수가 없는 회원은 가장 낮은 급수로 계산합니다.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: true, label: Text('예')),
+                    ButtonSegment(value: false, label: Text('아니오')),
+                  ],
+                  selected: {_gradeBalance},
+                  onSelectionChanged: (selection) =>
+                      setState(() => _gradeBalance = selection.first),
+                ),
                 const SizedBox(height: 24),
                 Row(
                   children: [
@@ -254,7 +275,7 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
     if (result == null) return;
     await ref
         .read(sessionControllerProvider(widget.sessionId).notifier)
-        .addGuest(result.name, result.gender);
+        .addGuest(result.name, result.gender, gradeId: result.gradeId);
   }
 
   Future<void> _saveCourtNames(BuildContext context) async {
@@ -296,6 +317,7 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
         courts: courts,
         gamesToGenerate: games,
         genderBalance: _genderBalance,
+        gradeBalance: _gradeBalance,
       );
     });
   }

@@ -14,9 +14,9 @@ class MembersController extends _$MembersController {
     return repo.getAll();
   }
 
-  Future<void> addMember(String name, Gender gender) async {
+  Future<void> addMember(String name, Gender gender, {int? gradeId}) async {
     final repo = await ref.read(membersRepositoryProvider.future);
-    await repo.add(name, gender);
+    await repo.add(name, gender, gradeId: gradeId);
     ref.invalidateSelf();
     await future;
   }

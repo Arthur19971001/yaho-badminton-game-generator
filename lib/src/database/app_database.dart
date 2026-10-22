@@ -23,7 +23,7 @@ Future<Database> openAppDatabase(String path) {
   return databaseFactoryFfi.openDatabase(
     path,
     options: OpenDatabaseOptions(
-      version: 4,
+      version: 5,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -32,7 +32,8 @@ Future<Database> openAppDatabase(String path) {
           CREATE TABLE members (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            gender TEXT NOT NULL
+            gender TEXT NOT NULL,
+            grade_id INTEGER
           )
         ''');
 
@@ -42,6 +43,7 @@ Future<Database> openAppDatabase(String path) {
             date TEXT NOT NULL,
             courts INTEGER NOT NULL DEFAULT 1,
             gender_balance INTEGER NOT NULL DEFAULT 0,
+            grade_balance INTEGER NOT NULL DEFAULT 0,
             games_json TEXT NOT NULL DEFAULT '[]',
             guests_json TEXT NOT NULL DEFAULT '[]',
             court_names_json TEXT NOT NULL DEFAULT '[]'
@@ -59,6 +61,9 @@ Future<Database> openAppDatabase(String path) {
             FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
           )
         ''');
+
+        await _createGradesTable(db);
+        await _createSettingsTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -96,7 +101,58 @@ Future<Database> openAppDatabase(String path) {
             "ALTER TABLE sessions ADD COLUMN court_names_json TEXT NOT NULL DEFAULT '[]'",
           );
         }
+        if (oldVersion < 5) {
+          // Member grades (급수) + app-wide settings (e.g. the alarm sound).
+          // Purely additive: existing members/sessions rows are never
+          // rebuilt or deleted -- columns are only appended, and every
+          // pre-existing member starts out on grade D.
+          await _createGradesTable(db);
+          await _createSettingsTable(db);
+          await db.execute('ALTER TABLE members ADD COLUMN grade_id INTEGER');
+          await db.execute(
+            'ALTER TABLE sessions ADD COLUMN grade_balance INTEGER NOT NULL DEFAULT 0',
+          );
+          await db.execute(
+            "UPDATE members SET grade_id = (SELECT id FROM grades WHERE name = 'D')",
+          );
+        }
       },
     ),
   );
+}
+
+/// Default grades seeded on first launch (and when upgrading to v5). The
+/// admin can add/rename/re-score/delete these afterwards from the
+/// "급수 관리" screen.
+const defaultGrades = [('A', 10), ('B', 8), ('C', 6), ('D', 4)];
+
+// No FK from members.grade_id: deleting a grade explicitly clears it on
+// every member who had it (see GradesRepository.delete), and an
+// unresolvable grade_id is treated the same as "no grade" anyway.
+Future<void> _createGradesTable(DatabaseExecutor db) async {
+  await db.execute('''
+    CREATE TABLE grades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      points INTEGER NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0
+    )
+  ''');
+  for (var i = 0; i < defaultGrades.length; i++) {
+    final (name, points) = defaultGrades[i];
+    await db.insert('grades', {
+      'name': name,
+      'points': points,
+      'sort_order': i,
+    });
+  }
+}
+
+Future<void> _createSettingsTable(DatabaseExecutor db) async {
+  await db.execute('''
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    )
+  ''');
 }

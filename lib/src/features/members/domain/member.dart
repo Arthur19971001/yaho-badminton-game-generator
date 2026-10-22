@@ -5,12 +5,17 @@ class Member {
     required this.id,
     required this.name,
     required this.gender,
+    this.gradeId,
     this.isUnknown = false,
   });
 
   final int id;
   final String name;
   final Gender gender;
+
+  /// The member's grade (급수), or null if none is set -- optional, and an
+  /// ungraded member counts as the lowest grade for grade-balanced games.
+  final int? gradeId;
 
   /// True only for the [Member.unknown] placeholder -- never persisted,
   /// never returned by a repository.
@@ -20,6 +25,7 @@ class Member {
         id: map['id']! as int,
         name: map['name']! as String,
         gender: Gender.fromDb(map['gender']! as String),
+        gradeId: map['grade_id'] as int?,
       );
 
   /// Stand-in for a player id that shows up in a session's game history but
@@ -38,6 +44,7 @@ class Member {
   Map<String, Object?> toInsertMap() => {
         'name': name,
         'gender': gender.name,
+        'grade_id': gradeId,
       };
 
   /// Unlike [toInsertMap] (for the auto-incrementing `members` table row),
@@ -48,17 +55,30 @@ class Member {
         'id': id,
         'name': name,
         'gender': gender.name,
+        'gradeId': gradeId,
       };
 
   factory Member.fromJson(Map<String, Object?> json) => Member(
         id: json['id']! as int,
         name: json['name']! as String,
         gender: Gender.fromDb(json['gender']! as String),
+        // Absent in guests persisted before grades existed.
+        gradeId: json['gradeId'] as int?,
       );
 
-  Member copyWith({String? name, Gender? gender}) => Member(
+  /// [gradeId] uses a sentinel default so callers can explicitly clear it
+  /// (pass null) as opposed to leaving it unchanged (omit it).
+  Member copyWith({
+    String? name,
+    Gender? gender,
+    Object? gradeId = _unchanged,
+  }) =>
+      Member(
         id: id,
         name: name ?? this.name,
         gender: gender ?? this.gender,
+        gradeId: identical(gradeId, _unchanged) ? this.gradeId : gradeId as int?,
       );
 }
+
+const _unchanged = Object();
